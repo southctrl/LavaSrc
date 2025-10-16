@@ -17,9 +17,6 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,7 +29,6 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 
 	private static final String APP_ID = "web-desktop-app-v1.0";
 	private static final long TOKEN_TTL = 55000;
-	private static final long TOKEN_PERSIST_INTERVAL = 5000;
 	private static final long CACHE_TTL = 300000;
 	private static final int MAX_CACHE_ENTRIES = 100;
 	private static final int REQUEST_TIMEOUT_MS = 8000;
@@ -47,20 +43,13 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 	private static final String[] SEPARATORS = {" - ", " – ", " — ", " ~ ", "-"};
 
 	private final HttpInterfaceManager httpInterfaceManager;
-	private final Path tokenFile;
 	private final Map<String, CacheEntry> cache;
 	private final RequestConfig requestConfig;
 
 	private TokenData tokenData;
-	private long lastTokenPersist = 0;
 
 	public MusixmatchLyricsManager() {
-		this(Paths.get(System.getProperty("java.io.tmpdir"), "mxm_token.json"));
-	}
-
-	public MusixmatchLyricsManager(Path tokenFile) {
 		this.httpInterfaceManager = HttpClientTools.createCookielessThreadLocalManager();
-		this.tokenFile = tokenFile;
 		this.cache = new ConcurrentHashMap<>();
 		this.requestConfig = RequestConfig.custom()
 			.setConnectTimeout(REQUEST_TIMEOUT_MS)
@@ -305,34 +294,17 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 		long now = System.currentTimeMillis();
 
 		if (!force && tokenData != null && now < tokenData.expires) {
-			tokenData.expires = now + TOKEN_TTL;
-			if (now - lastTokenPersist > TOKEN_PERSIST_INTERVAL) {
-				lastTokenPersist = now;
-				saveTokenToFile();
-			}
 			return tokenData.value;
-		}
-
-		if (tokenData == null && !force) {
-			tokenData = readTokenFromFile();
-			if (tokenData != null && now < tokenData.expires) {
-				return tokenData.value;
-			}
 		}
 
 		return acquireNewToken();
 	}
 
 	private String acquireNewToken() throws IOException {
-		try {
-			String token = fetchToken();
-			long expires = System.currentTimeMillis() + TOKEN_TTL;
-			tokenData = new TokenData(token, expires);
-			saveTokenToFile();
-			return token;
-		} catch (IOException e) {
-			throw e;
-		}
+		String token = fetchToken();
+		long expires = System.currentTimeMillis() + TOKEN_TTL;
+		tokenData = new TokenData(token, expires);
+		return token;
 	}
 
 	private String fetchToken() throws IOException {
@@ -376,37 +348,6 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 			}
 
 			return response.get("message").get("body");
-		}
-	}
-
-	private TokenData readTokenFromFile() {
-		try {
-			if (Files.exists(tokenFile)) {
-				String content = new String(Files.readAllBytes(tokenFile));
-				JsonBrowser json = JsonBrowser.parse(content);
-				String value = json.get("value").text();
-				JsonBrowser expiresBrowser = json.get("expires");
-				long expires = expiresBrowser.isNull() ? 0 : Long.parseLong(expiresBrowser.text());
-
-				if (value != null && expires > System.currentTimeMillis()) {
-					return new TokenData(value, expires);
-				}
-			}
-		} catch (Exception e) {
-			// Ignore this.
-		}
-		return null;
-	}
-
-	private void saveTokenToFile() {
-		try {
-			if (tokenData != null) {
-				String json = String.format("{\"value\":\"%s\",\"expires\":%d}", 
-					tokenData.value, tokenData.expires);
-				Files.write(tokenFile, json.getBytes());
-			}
-		} catch (Exception e) {
-			// Ignore this.
 		}
 	}
 
