@@ -14,6 +14,15 @@ public class LyricsSourcesConfig {
 	private boolean yandexMusic = false;
 	private boolean vkMusic = false;
 	private boolean lrcLib = false;
+	private boolean musixmatch = false;
+
+	public boolean isMusixmatch() {
+		return this.musixmatch;
+	}
+
+	public void setMusixmatch(boolean musixmatch) {
+		this.musixmatch = musixmatch;
+	}
 
 	public boolean isSpotify() {
 		return this.spotify;
@@ -54,11 +63,9 @@ public class LyricsSourcesConfig {
 	public void setVkMusic(boolean vkMusic) {
 		this.vkMusic = vkMusic;
 	}
-
 	public boolean isLrcLib() {
 		return this.lrcLib;
 	}
-
 	public void setLrcLib(boolean lrcLib) {
 		this.lrcLib = lrcLib;
 	}
