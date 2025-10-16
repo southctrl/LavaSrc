@@ -5,11 +5,12 @@ import com.github.topi314.lavalyrics.api.LyricsManagerConfiguration;
 import com.github.topi314.lavasearch.SearchManager;
 import com.github.topi314.lavasearch.api.SearchManagerConfiguration;
 import com.github.topi314.lavasrc.applemusic.AppleMusicSourceManager;
+import com.github.topi314.lavasrc.lrclib.LrcLibLyricsManager;
+import com.github.topi314.lavasrc.musixmatch.MusixmatchLyricsManager;
 import com.github.topi314.lavasrc.deezer.DeezerAudioSourceManager;
 import com.github.topi314.lavasrc.deezer.DeezerAudioTrack;
 import com.github.topi314.lavasrc.flowerytts.FloweryTTSSourceManager;
 import com.github.topi314.lavasrc.jiosaavn.JioSaavnAudioSourceManager;
-import com.github.topi314.lavasrc.lrclib.LrcLibLyricsManager;
 import com.github.topi314.lavasrc.mirror.DefaultMirroringAudioTrackResolver;
 import com.github.topi314.lavasrc.plugin.config.*;
 import com.github.topi314.lavasrc.plugin.service.ProxyConfigurationService;
@@ -21,8 +22,8 @@ import com.github.topi314.lavasrc.vkmusic.VkMusicSourceManager;
 import com.github.topi314.lavasrc.yandexmusic.YandexMusicSourceManager;
 import com.github.topi314.lavasrc.youtube.YoutubeSearchManager;
 import com.github.topi314.lavasrc.ytdlp.YtdlpAudioSourceManager;
-import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import dev.arbjerg.lavalink.api.AudioPlayerManagerConfiguration;
+import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,10 +49,11 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 	private YoutubeSearchManager youtube;
 	private VkMusicSourceManager vkMusic;
 	private TidalSourceManager tidal;
-	private JioSaavnAudioSourceManager jioSaavn;
 	private QobuzAudioSourceManager qobuz;
 	private YtdlpAudioSourceManager ytdlp;
 	private LrcLibLyricsManager lrcLib;
+	private MusixmatchLyricsManager musixmatch;
+	private JioSaavnAudioSourceManager jioSaavn;
 
 	public LavaSrcPlugin(
 		LavaSrcConfig pluginConfig,
@@ -89,6 +91,7 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 				this.spotify.setLocalFiles(spotifyConfig.isLocalFiles());
 			}
 		}
+		
 		if (sourcesConfig.isAppleMusic()) {
 			this.appleMusic = new AppleMusicSourceManager(pluginConfig.getProviders(), appleMusicConfig.getMediaAPIToken(), appleMusicConfig.getCountryCode(), unused -> manager);
 			if (appleMusicConfig.getPlaylistLoadLimit() > 0) {
@@ -98,29 +101,27 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 				appleMusic.setAlbumPageLimit(appleMusicConfig.getAlbumLoadLimit());
 			}
 		}
+		
 		if (sourcesConfig.isDeezer() || lyricsSourcesConfig.isDeezer()) {
 			this.deezer = new DeezerAudioSourceManager(deezerConfig.getMasterDecryptionKey(), deezerConfig.getArl(), deezerConfig.getFormats());
 		}
-
+		
 		if (sourcesConfig.isYandexMusic() || lyricsSourcesConfig.isYandexMusic()) {
 			this.yandexMusic = new YandexMusicSourceManager(yandexMusicConfig.getAccessToken());
-
+			
 			proxyConfigurationService.configure(this.yandexMusic, yandexMusicConfig.getProxy());
-
+			
 			if (yandexMusicConfig.getPlaylistLoadLimit() > 0) {
 				yandexMusic.setPlaylistLoadLimit(yandexMusicConfig.getPlaylistLoadLimit());
 			}
-
 			if (yandexMusicConfig.getAlbumLoadLimit() > 0) {
 				yandexMusic.setAlbumLoadLimit(yandexMusicConfig.getAlbumLoadLimit());
 			}
-
 			if (yandexMusicConfig.getArtistLoadLimit() > 0) {
 				yandexMusic.setArtistLoadLimit(yandexMusicConfig.getArtistLoadLimit());
 			}
-
 		}
-
+		
 		if (sourcesConfig.isFloweryTTS()) {
 			this.flowerytts = new FloweryTTSSourceManager(floweryTTSConfig.getVoice());
 			if (floweryTTSConfig.getTranslate()) {
@@ -136,6 +137,7 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 				this.flowerytts.setAudioFormat(floweryTTSConfig.getAudioFormat());
 			}
 		}
+		
 		if (sourcesConfig.isYoutube() || lyricsSourcesConfig.isYoutube()) {
 			if (hasNewYoutubeSource()) {
 				log.info("Registering Youtube Source audio source manager...");
@@ -144,10 +146,12 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 				throw new IllegalStateException("Youtube LavaSearch requires the new Youtube Source plugin to be enabled.");
 			}
 		}
+		
 		if (sourcesConfig.isVkMusic() || lyricsSourcesConfig.isVkMusic()) {
 			this.vkMusic = new VkMusicSourceManager(vkMusicConfig.getUserToken());
+			
 			proxyConfigurationService.configure(this.vkMusic, vkMusicConfig.getProxy());
-
+			
 			if (vkMusicConfig.getPlaylistLoadLimit() > 0) {
 				vkMusic.setPlaylistLoadLimit(vkMusicConfig.getPlaylistLoadLimit());
 			}
@@ -158,15 +162,18 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 				vkMusic.setRecommendationsLoadLimit(vkMusicConfig.getRecommendationLoadLimit());
 			}
 		}
+		
 		if (sourcesConfig.isTidal()) {
 			this.tidal = new TidalSourceManager(pluginConfig.getProviders(), tidalConfig.getCountryCode(), unused -> this.manager, tidalConfig.getToken());
 			if (tidalConfig.getSearchLimit() > 0) {
 				this.tidal.setSearchLimit(tidalConfig.getSearchLimit());
 			}
 		}
+		
 		if (sourcesConfig.isQobuz()) {
 			this.qobuz = new QobuzAudioSourceManager(qobuzConfig.getUserOauthToken(), qobuzConfig.getAppId(), qobuzConfig.getAppSecret());
 		}
+		
 		if (sourcesConfig.isYtdlp()) {
 			this.ytdlp = new YtdlpAudioSourceManager(ytdlpConfig.getPath(), ytdlpConfig.getSearchLimit(), ytdlpConfig.getCustomLoadArgs(), ytdlpConfig.getCustomPlaybackArgs());
 		}
@@ -175,9 +182,13 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 			this.lrcLib = new LrcLibLyricsManager();
 		}
 
+		if (lyricsSourcesConfig.isMusixmatch()) {
+			this.musixmatch = new MusixmatchLyricsManager();
+		}
+		
 		if (sourcesConfig.isJiosaavn()) {
 			this.jioSaavn = new JioSaavnAudioSourceManager(jioSaavnConfig.buildConfig());
-
+			
 			proxyConfigurationService.configure(this.jioSaavn, jioSaavnConfig.getProxy());
 		}
 	}
@@ -195,46 +206,57 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 	@Override
 	public AudioPlayerManager configure(@NotNull AudioPlayerManager manager) {
 		this.manager = manager;
+		
 		if (this.spotify != null && this.sourcesConfig.isSpotify()) {
 			log.info("Registering Spotify audio source manager...");
 			manager.registerSourceManager(this.spotify);
 		}
+		
 		if (this.appleMusic != null) {
 			log.info("Registering Apple Music audio source manager...");
 			manager.registerSourceManager(this.appleMusic);
 		}
+		
 		if (this.deezer != null && this.sourcesConfig.isDeezer()) {
 			log.info("Registering Deezer audio source manager...");
 			manager.registerSourceManager(this.deezer);
 		}
-		if (this.yandexMusic != null) {
+		
+		if (this.yandexMusic != null && this.sourcesConfig.isYandexMusic()) {
 			log.info("Registering Yandex Music audio source manager...");
 			manager.registerSourceManager(this.yandexMusic);
 		}
+		
 		if (this.flowerytts != null) {
 			log.info("Registering Flowery TTS audio source manager...");
 			manager.registerSourceManager(this.flowerytts);
 		}
-		if (this.vkMusic != null) {
-			log.info("Registering Vk Music audio source manager...");
+		
+		if (this.vkMusic != null && this.sourcesConfig.isVkMusic()) {
+			log.info("Registering VK Music audio source manager...");
 			manager.registerSourceManager(this.vkMusic);
 		}
+		
 		if (this.tidal != null) {
 			log.info("Registering Tidal audio source manager...");
 			manager.registerSourceManager(this.tidal);
 		}
+		
 		if (this.qobuz != null) {
 			log.info("Registering Qobuz audio source manager...");
 			manager.registerSourceManager(this.qobuz);
 		}
+		
 		if (this.ytdlp != null) {
 			log.info("Registering YTDLP audio source manager...");
 			manager.registerSourceManager(this.ytdlp);
 		}
-		if (this.jioSaavn != null) {
+
+		if (this.jioSaavn != null && this.sourcesConfig.isJiosaavn()) {
 			log.info("Registering JioSaavn audio source manager...");
 			manager.registerSourceManager(this.jioSaavn);
 		}
+		
 		return manager;
 	}
 
@@ -245,30 +267,37 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 			log.info("Registering Spotify search manager...");
 			manager.registerSearchManager(this.spotify);
 		}
+		
 		if (this.appleMusic != null && this.sourcesConfig.isAppleMusic()) {
 			log.info("Registering Apple Music search manager...");
 			manager.registerSearchManager(this.appleMusic);
 		}
+		
 		if (this.deezer != null && this.sourcesConfig.isDeezer()) {
 			log.info("Registering Deezer search manager...");
 			manager.registerSearchManager(this.deezer);
 		}
+		
 		if (this.youtube != null && this.sourcesConfig.isYoutube()) {
 			log.info("Registering Youtube search manager...");
 			manager.registerSearchManager(this.youtube);
 		}
+		
 		if (this.yandexMusic != null && this.sourcesConfig.isYandexMusic()) {
 			log.info("Registering Yandex Music search manager...");
 			manager.registerSearchManager(this.yandexMusic);
 		}
+		
 		if (this.vkMusic != null && this.sourcesConfig.isVkMusic()) {
 			log.info("Registering VK Music search manager...");
 			manager.registerSearchManager(this.vkMusic);
 		}
+
 		if (this.jioSaavn != null && this.sourcesConfig.isJiosaavn()) {
 			log.info("Registering JioSaavn search manager...");
 			manager.registerSearchManager(this.jioSaavn);
 		}
+		
 		return manager;
 	}
 
@@ -279,26 +308,37 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 			log.info("Registering Spotify lyrics manager...");
 			manager.registerLyricsManager(this.spotify);
 		}
+		
 		if (this.deezer != null && this.lyricsSourcesConfig.isDeezer()) {
 			log.info("Registering Deezer lyrics manager...");
 			manager.registerLyricsManager(this.deezer);
 		}
+		
 		if (this.youtube != null && this.lyricsSourcesConfig.isYoutube()) {
 			log.info("Registering YouTube lyrics manager...");
 			manager.registerLyricsManager(this.youtube);
 		}
+		
 		if (this.yandexMusic != null && this.lyricsSourcesConfig.isYandexMusic()) {
 			log.info("Registering Yandex Music lyrics manager");
 			manager.registerLyricsManager(this.yandexMusic);
 		}
+		
 		if (this.vkMusic != null && this.lyricsSourcesConfig.isVkMusic()) {
 			log.info("Registering VK Music lyrics manager...");
 			manager.registerLyricsManager(this.vkMusic);
 		}
+		
 		if (this.lrcLib != null && this.lyricsSourcesConfig.isLrcLib()) {
 			log.info("Registering LRCLIB lyrics manager...");
 			manager.registerLyricsManager(this.lrcLib);
 		}
+
+		if (this.musixmatch != null && this.lyricsSourcesConfig.isMusixmatch()) {
+			log.info("Registering Musixmatch lyrics manager...");
+			manager.registerLyricsManager(this.musixmatch);
+		}
+		
 		return manager;
 	}
 
@@ -369,7 +409,7 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 			if (ytdlpConfig.getPath() != null) {
 				this.ytdlp.setPath(ytdlpConfig.getPath());
 			}
-			if (ytdlpConfig.getSearchLimit() > 0) {
+			if (ytdlpConfig.getSearchLimit() != null && ytdlpConfig.getSearchLimit() > 0) {
 				this.ytdlp.setSearchLimit(ytdlpConfig.getSearchLimit());
 			}
 			if (ytdlpConfig.getCustomLoadArgs() != null) {
