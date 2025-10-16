@@ -409,7 +409,7 @@ public class LavaSrcPlugin implements AudioPlayerManagerConfiguration, SearchMan
 			if (ytdlpConfig.getPath() != null) {
 				this.ytdlp.setPath(ytdlpConfig.getPath());
 			}
-			if (ytdlpConfig.getSearchLimit() != null && ytdlpConfig.getSearchLimit() > 0) {
+			if (ytdlpConfig.getSearchLimit() > 0) {
 				this.ytdlp.setSearchLimit(ytdlpConfig.getSearchLimit());
 			}
 			if (ytdlpConfig.getCustomLoadArgs() != null) {
