@@ -19,7 +19,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,13 +26,10 @@ import java.util.regex.Pattern;
 
 public class MusixmatchLyricsManager implements AudioLyricsManager {
 
-	private static final String APP_ID = "web-desktop-app-v1.0";
-	private static final long TOKEN_TTL = 55000;
 	private static final long CACHE_TTL = 300000;
 	private static final int MAX_CACHE_ENTRIES = 100;
 	private static final int REQUEST_TIMEOUT_MS = 8000;
 
-	private static final String TOKEN_ENDPOINT = "https://apic-desktop.musixmatch.com/ws/1.1/token.get";
 	private static final String SEARCH_ENDPOINT = "https://apic-desktop.musixmatch.com/ws/1.1/track.search";
 	private static final String LYRICS_ENDPOINT = "https://apic-desktop.musixmatch.com/ws/1.1/track.subtitle.get";
 	private static final String ALT_LYRICS_ENDPOINT = "https://apic-desktop.musixmatch.com/ws/1.1/macro.subtitles.get";
@@ -45,8 +41,7 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 	private final HttpInterfaceManager httpInterfaceManager;
 	private final Map<String, CacheEntry> cache;
 	private final RequestConfig requestConfig;
-
-	private TokenData tokenData;
+	private final MusixmatchTokenTracker tokenTracker;
 
 	public MusixmatchLyricsManager() {
 		this.httpInterfaceManager = HttpClientTools.createCookielessThreadLocalManager();
@@ -56,6 +51,7 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 			.setSocketTimeout(REQUEST_TIMEOUT_MS)
 			.setConnectionRequestTimeout(REQUEST_TIMEOUT_MS)
 			.build();
+		this.tokenTracker = new MusixmatchTokenTracker();
 	}
 
 	@NotNull
@@ -140,7 +136,7 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 				return formatResult(subtitles, lyrics, trackData);
 			}
 		} catch (Exception e) {
-			// If it fails just return null.
+			return null;
 		}
 		return null;
 	}
@@ -182,7 +178,7 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 				return formatResult(subtitles, null, track);
 			}
 		} catch (Exception e) {
-			// If it fails just return null.
+			return null;
 		}
 		return null;
 	}
@@ -290,44 +286,20 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 		cache.put(key, new CacheEntry(value, System.currentTimeMillis() + CACHE_TTL));
 	}
 
-	private synchronized String getToken(boolean force) throws IOException {
-		long now = System.currentTimeMillis();
-
-		if (!force && tokenData != null && now < tokenData.expires) {
-			return tokenData.value;
-		}
-
-		return acquireNewToken();
-	}
-
-	private String acquireNewToken() throws IOException {
-		String token = fetchToken();
-		long expires = System.currentTimeMillis() + TOKEN_TTL;
-		tokenData = new TokenData(token, expires);
-		return token;
-	}
-
-	private String fetchToken() throws IOException {
-		try {
-			URIBuilder builder = new URIBuilder(TOKEN_ENDPOINT)
-				.addParameter("app_id", APP_ID);
-
-			JsonBrowser body = apiGet(builder.build());
-			return body.get("user_token").text();
-		} catch (URISyntaxException e) {
-			throw new IOException(e);
-		}
-	}
-
 	private JsonBrowser callMxm(URI uri) throws IOException {
-		String token = getToken(false);
+		String token = tokenTracker.getUserToken();
+		String appId = tokenTracker.getAppId();
+
 		try {
 			URIBuilder builder = new URIBuilder(uri)
-				.addParameter("app_id", APP_ID)
+				.addParameter("app_id", appId)
 				.addParameter("usertoken", token);
 			return apiGet(builder.build());
 		} catch (URISyntaxException e) {
 			throw new IOException(e);
+		} catch (IOException e) {
+			tokenTracker.invalidateToken();
+			throw e;
 		}
 	}
 
@@ -343,6 +315,11 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 			JsonBrowser statusCodeBrowser = header.get("status_code");
 			int statusCode = statusCodeBrowser.isNull() ? 0 : Integer.parseInt(statusCodeBrowser.text());
 
+			if (statusCode == 401 || statusCode == 403) {
+				tokenTracker.invalidateToken();
+				throw new IOException("Musixmatch API authentication error: " + statusCode);
+			}
+
 			if (statusCode != 200) {
 				throw new IOException("Musixmatch API error: " + statusCode);
 			}
@@ -357,16 +334,6 @@ public class MusixmatchLyricsManager implements AudioLyricsManager {
 			httpInterfaceManager.close();
 		} catch (IOException e) {
 			throw new RuntimeException(e);
-		}
-	}
-
-	private static class TokenData {
-		String value;
-		long expires;
-
-		TokenData(String value, long expires) {
-			this.value = value;
-			this.expires = expires;
 		}
 	}
 
